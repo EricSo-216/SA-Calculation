@@ -578,30 +578,28 @@
 
 <script>
   /* ---------- PASSWORD GATE ----------
-     Access code: SavillsSAca1 - change it by generating a new SHA-256 hash:
-     in any browser console, run:
-       crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourNewPassword'))
-         .then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
-     then paste the printed hash in place of GATE_HASH below. This is a client-side deterrent,
-     not real security - the whole page still downloads to the browser regardless. */
-  const GATE_HASH = 'b17544413c9814b9d1ecd81412bdce9684730a600ab545b96def6bf016a98c73';
+     Access code: SavillsSAca1 - change it by editing GATE_CODE_B64 below. It's base64-encoded
+     rather than shown as plain text, but this is a client-side deterrent, not real security -
+     the whole page still downloads to the browser regardless, and base64 is trivially reversible.
+     To set a new code, run in any browser console: btoa('yourNewPassword')
+     and paste the result in place of GATE_CODE_B64.
+     Note: this deliberately avoids the Web Crypto API (crypto.subtle) - that API only works in a
+     "secure context" (HTTPS or localhost) and silently fails on file:// URLs, which would make the
+     gate never unlock for anyone testing the file locally. Plain base64 works everywhere. */
+  const GATE_CODE_B64 = 'U2F2aWxsc1NBY2Ex';
   const GATE_SESSION_KEY = 'sa-calc-unlocked';
-
-  async function sha256Hex(text){
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
-  }
 
   function unlockGate(){
     document.getElementById('gate').classList.add('unlocked');
-    sessionStorage.setItem(GATE_SESSION_KEY, '1');
+    try { sessionStorage.setItem(GATE_SESSION_KEY, '1'); } catch(e) { /* storage unavailable - unlock still applies for this page view */ }
   }
 
-  async function tryUnlock(){
+  function tryUnlock(){
     const input = document.getElementById('gatePassword');
     const errorEl = document.getElementById('gateError');
-    const hash = await sha256Hex(input.value);
-    if (hash === GATE_HASH){
+    let expected = '';
+    try { expected = atob(GATE_CODE_B64); } catch(e) { expected = ''; }
+    if (input.value === expected){
       unlockGate();
     } else {
       errorEl.textContent = typeof t === 'function' ? t('gate_error') : 'Incorrect access code.';
@@ -610,7 +608,9 @@
     }
   }
 
-  if (sessionStorage.getItem(GATE_SESSION_KEY) === '1'){
+  let alreadyUnlocked = false;
+  try { alreadyUnlocked = sessionStorage.getItem(GATE_SESSION_KEY) === '1'; } catch(e) { /* storage unavailable */ }
+  if (alreadyUnlocked){
     document.getElementById('gate').classList.add('unlocked');
   }
   document.getElementById('gateSubmit').addEventListener('click', tryUnlock);
